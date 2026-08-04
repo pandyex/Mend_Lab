@@ -1,0 +1,24 @@
+/*
+ * 檔案功能：這是一段前端 JavaScript 腳本，模擬搜尋結果頁面顯示關鍵字的功能。
+ * 運作原理：
+ * 1. 讀取輸入：當頁面載入完成時，從網址列的 hash (即 # 之後的部分) 讀取字串。
+ * 2. 處理字串：移除 'query=' 前綴並對字串進行 URI Decode 解碼。
+ * 3. 顯示結果：取得頁面上的 search-results-message 元素，並將處理後的字串直接寫入其 innerHTML 中。
+ */
+
+window.onload = function () {
+    let hashContent = window.location.hash.substring(1);
+
+    if (hashContent) {
+        let searchQuery = hashContent.replace('query=', '');
+
+        searchQuery = decodeURIComponent(searchQuery);
+
+        const resultContainer = document.getElementById('search-results-message');
+
+        if (resultContainer) {
+        
+            resultContainer.innerHTML = '您搜尋的關鍵字為: <b>' + searchQuery + '</b>';
+        }
+    }
+};
