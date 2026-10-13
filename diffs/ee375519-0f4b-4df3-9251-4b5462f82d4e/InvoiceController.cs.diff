@@ -1,0 +1,134 @@
+ /*
+  * 檔案功能：這是一個 ASP.NET Core API 控制器 (InvoiceController)，負責處理發票文件管理系統的後端邏輯。
+  * 運作原理：
+  * 1. 初始化：設定一個發票儲存目錄 (SecureData/Invoices)。
+  * 2. 下載發票 (DownloadInvoice)：接收 fileName 參數，透過 Path.Combine 組裝路徑讀取檔案並回傳。
+  * 3. 列表發票 (ListRecentInvoices)：讀取儲存目錄下的所有檔案資訊並回傳 JSON 格式。
+  * 4. 產生佔位符發票 (GeneratePlaceholder)：接收 customerId 產生一個暫時的 txt 檔，此功能有正規表示式與路徑驗證。
+  */
+ using Microsoft.AspNetCore.Mvc;
+ using System.IO;
+ using System;
+ using System.Collections.Generic;
+ 
+ namespace DocumentManagementSystem.Controllers
+ {
+     [ApiController]
+     [Route("api/[controller]")]
+     public class InvoiceController : ControllerBase
+     {
+         private readonly string _invoiceStoragePath;
+ 
+         public InvoiceController()
+         {
+             _invoiceStoragePath = Path.Combine(Directory.GetCurrentDirectory(), "SecureData", "Invoices");
+             
+             if (!Directory.Exists(_invoiceStoragePath))
+             {
+                 Directory.CreateDirectory(_invoiceStoragePath);
+             }
+         }
+ 
+         [HttpGet("download")]
+         public IActionResult DownloadInvoice([FromQuery] string fileName)
+         {
+             if (string.IsNullOrWhiteSpace(fileName))
+             {
+                 return BadRequest(new { Message = "File name parameter is missing or empty." });
+             }
+ 
+             try
+             {
+                 string fullFilePath = Path.Combine(_invoiceStoragePath, fileName);
++                string normalizedPath = Path.GetFullPath(fullFilePath);
++                if (!normalizedPath.StartsWith(_invoiceStoragePath))
++                {
++                    return BadRequest(new { Message = "Invalid file path." });
++                }
+ 
++
+                 byte[] fileBytes;
+                 try
+                 {
+                     fileBytes = System.IO.File.ReadAllBytes(fullFilePath);
+                 }
+                 catch (IOException)
+                 {
+                     return NotFound(new { Message = $"Invoice '{fileName}' not found." });
+                 }
+                 
+                 string contentType = "application/octet-stream";
+                 if (fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                 {
+                     contentType = "application/pdf";
+                 }
+                 else if (fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                 {
+                     contentType = "application/xml";
+                 }
+ 
+                 return File(fileBytes, contentType, fileName);
+             }
+             catch (UnauthorizedAccessException)
+             {
+                 return StatusCode(403, new { Message = "Access to the requested file is denied." });
+             }
+             catch (Exception)
+             {
+                 return StatusCode(500, new { Message = "An internal server error occurred while processing the request." });
+             }
+         }
+ 
+         [HttpGet("list")]
+         public IActionResult ListRecentInvoices()
+         {
+             try
+             {
+                 var directoryInfo = new DirectoryInfo(_invoiceStoragePath);
+                 var files = directoryInfo.GetFiles();
+                 
+                 var invoiceList = new List<object>();
+                 foreach (var file in files)
+                 {
+                     invoiceList.Add(new 
+                     { 
+                         FileName = file.Name, 
+                         SizeKB = file.Length / 1024,
+                         CreatedAt = file.CreationTime 
+                     });
+                 }
+ 
+                 return Ok(invoiceList);
+             }
+             catch (Exception)
+             {
+                 using System.IO;
+                 return StatusCode(500, new { Message = "Could not retrieve the invoice list." });
+             }
+         }
+         
+         [HttpPost("generate-placeholder")]
+         public IActionResult GeneratePlaceholder([FromQuery] string customerId)
+         {
+             if (string.IsNullOrWhiteSpace(customerId)) return BadRequest();
+             
+ 
+             if (!System.Text.RegularExpressions.Regex.IsMatch(customerId, "^[a-zA-Z0-9]+$"))
+             {
+                 return BadRequest(new { Message = "Invalid customer ID format." });
+             }
+ 
+             string dummyFileName = $"Invoice_{customerId}_{DateTime.Now:yyyyMMdd}.txt";
+             string path = Path.Combine(_invoiceStoragePath, dummyFileName);
+             string normalizedPath = Path.GetFullPath(path);
+             if (!normalizedPath.StartsWith(_invoiceStoragePath))
+             {
+                 return BadRequest(new { Message = "Invalid file path." });
+             }
+  
+             
+             System.IO.File.WriteAllText(path, $"Placeholder invoice content generated for customer: {customerId}");
+             return Ok(new { FileName = dummyFileName });
+         }
+     }
+ }
